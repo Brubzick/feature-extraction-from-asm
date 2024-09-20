@@ -106,12 +106,12 @@ def ConstructFuncs(filePath):
     name2called = {}
     conFuncs = []
     funcname2lastInst = {}
+    name2strData = {}
 
     for func in funcs:
         conFunc = {'funcname': func['funcName']}
         blocks = []
         bb_addr_list = []
-        strDatas = {}
         call = []
 
         for b in func['blocks']:
@@ -125,7 +125,7 @@ def ConstructFuncs(filePath):
                 inst = block[0].split()
                 strData = ' '.join(inst[1:])
                 if strData[0] == '"' and strData[-1] == '"':
-                    strDatas[b['bName']] = strData[1:-1]
+                    name2strData[b['bName']] = strData[1:-1]
             # canonical block    
             else: 
                 modBlock = []
@@ -133,6 +133,13 @@ def ConstructFuncs(filePath):
                     inst = block[i].split()
 
                     if inst[0].startswith('.'):
+                        if inst[0] == '.word':
+                            if i == 0:
+                                label = b['bName']
+                            else:
+                                label = b['bName'] + '+' + str(i*4)
+                            if name2strData.get(inst[1]) != None:
+                                name2strData[label] = name2strData[inst[1]]
                         addr_index += 1
                         continue
 
@@ -155,8 +162,6 @@ def ConstructFuncs(filePath):
         conFunc['bb_addr_list'] = bb_addr_list
         conFunc['call'] = call
         conFunc['bName2addr'] = func['name2id']
-        if strDatas != {}:
-            conFunc['strDatas'] = strDatas
         
         conFuncs.append(conFunc)
         funcname2lastInst[func['funcName']] = blocks[-1][-1]
@@ -197,12 +202,13 @@ def ConstructFuncs(filePath):
             addr_index += len(block)
         
         conFunc['edges'] = edges
+        
+        del conFunc['bName2addr']
 
-    return conFuncs
+    return conFuncs, name2strData
 
 
 
-# conFuncs = ConstructFuncs('./gnu_asm/dfs_gcc_arm.txt')
+# conFuncs, name2strData = ConstructFuncs('./gnu_asm/dfs_gcc_arm.txt')
 
-# for func in conFuncs:
-#     print(func.keys())
+# print(name2strData)
