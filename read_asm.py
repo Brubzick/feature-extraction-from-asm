@@ -1,3 +1,4 @@
+import sys
 
 def ReadAsm(filePath):
     asmLines = []
@@ -19,7 +20,15 @@ def Split2Functions(asmLines):
     start = 0
     end = 0
 
+    # 移到第一个函数的开头
     for i in range(len(asmLines)):
+        line = asmLines[i]
+        if isFunctionEnd(line):
+            start = i
+            end = i
+            break   
+    # 遍历函数
+    for i in range(start, len(asmLines)):
         line = asmLines[i]
         if isFunctionEnd(line):
             end = i
@@ -40,7 +49,14 @@ def Split2BBlocks(asmLines, funcRange):
         return []
     
     funcName = asmLines[start]
-    right = funcName.index(':')
+    
+    # 如果输入的文本没有函数头，则会提示no functions并退出程序
+    try:
+        right = funcName.index(':')
+    except:
+        print('There are no functions.')
+        sys.exit(0)
+
     funcName = funcName[0:right]
     start += 1
 
@@ -107,6 +123,7 @@ def ConstructFuncs(filePath):
     conFuncs = []
     funcname2lastInst = {}
     name2strData = {}
+    strLabel = {}
 
     for func in funcs:
         conFunc = {'funcname': func['funcName']}
@@ -122,10 +139,24 @@ def ConstructFuncs(filePath):
 
             # data block
             if b['bName'].startswith('.LC') or b['bName'].startswith('.L.str'):
-                inst = block[0].split()
-                strData = ' '.join(inst[1:])
-                if strData[0] == '"' and strData[-1] == '"':
-                    name2strData[b['bName']] = strData[1:-1]
+                if b['bName'].startswith('.LCPI'): # clang-arm中的情况
+                    for i in range(len(block)):
+                        inst = block[i].split()
+                        if inst[0] == '.long':
+                            if i == 0:
+                                label = b['bName']
+                            else:
+                                label = b['bName'] + '+' + str(i*4)
+                            try:
+                                j = inst[1].index('-')
+                                strLabel[label] = inst[1][0:j]
+                            except:
+                                pass
+                else:
+                    inst = block[0].split()
+                    strData = ' '.join(inst[1:])
+                    if strData[0] == '"' and strData[-1] == '"':
+                        name2strData[b['bName']] = strData[1:-1]
             # canonical block    
             else: 
                 modBlock = []
@@ -133,7 +164,7 @@ def ConstructFuncs(filePath):
                     inst = block[i].split()
 
                     if inst[0].startswith('.'):
-                        if inst[0] == '.word':
+                        if inst[0] == '.word': # gcc-arm中会出现的情况
                             if i == 0:
                                 label = b['bName']
                             else:
@@ -158,13 +189,20 @@ def ConstructFuncs(filePath):
                 if modBlock != []:
                     blocks.append(modBlock)
 
-        conFunc['blocks'] = blocks
-        conFunc['bb_addr_list'] = bb_addr_list
-        conFunc['call'] = call
-        conFunc['bName2addr'] = func['name2id']
-        
-        conFuncs.append(conFunc)
-        funcname2lastInst[func['funcName']] = blocks[-1][-1]
+        # clang-arm中.long的情况
+        if strLabel != {}:
+            for key in strLabel:
+                if name2strData.get(strLabel[key]) != None:
+                    name2strData[key] = name2strData[strLabel[key]]
+
+        if blocks != []:
+            conFunc['blocks'] = blocks
+            conFunc['bb_addr_list'] = bb_addr_list
+            conFunc['call'] = call
+            conFunc['bName2addr'] = func['name2id']
+            
+            conFuncs.append(conFunc)
+            funcname2lastInst[func['funcName']] = blocks[-1][-1]
 
 
     # 边和被调用
@@ -204,11 +242,7 @@ def ConstructFuncs(filePath):
         conFunc['edges'] = edges
         
         del conFunc['bName2addr']
+    
+    print(name2strData)
 
     return conFuncs, name2strData
-
-
-
-# conFuncs, name2strData = ConstructFuncs('./gnu_asm/dfs_gcc_arm.txt')
-
-# print(name2strData)

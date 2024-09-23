@@ -4,7 +4,7 @@ from discovRe_asm import get_discoverRe_feature
 from raw_graphs import *
 from graph_analysis_asm import *
 
-def get_func_cfgs_disasm(filePath, fileName):
+def get_func_cfgs_asm(filePath, fileName):
 
     funcs, name2strData = ConstructFuncs(filePath)
 
